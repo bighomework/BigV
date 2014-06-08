@@ -4,26 +4,121 @@
 @author: admin
 '''
 import csv
+from xml.sax.handler import ContentHandler  
+from xml.sax import parse  
+from xml.etree import ElementTree as ET
+import pickle
 import math
 import re 
+import os.path
+import config
 from Item import *
 from itemDatabase import WeiboDatabase, FigureDatabase
 from gensim import corpora, models, similarities
+import jieba
+import logging
+
+class DicHandler(ContentHandler):
+    
+    def __init__(self):
+        self.content = False
+        self.dic = []         
+    
+    def startElement(self,name,attrs):  
+        if name == 'content':
+            self.content = True
+          
+    def endElement(self,name):  
+        if name == 'content':
+            self.content = False
+          
+    def characters(self,chars):  
+        if self.content:
+            applst = list(jieba.cut(chars))
+            applst = self.rmShortWords(applst)
+            self.dic.append( applst )
+
+    def rmShortWords(self, applst):
+        ret = []
+        for i in applst:
+            if len(i) > 1:
+                ret.append(i)
+        return ret
+        
+
+
 
 class Analyser(object):
     
     def __init__(self, filename):
-        self.anaLst = []
-        with open(filename, 'r') as f:
-            for line in f.readlines():
-                self.anaLst.append( line ) 
+        logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+        self.buildIndex(filename)
+        
+        self.buildWords()
+        if not os.path.exists(config.DICPATH):
+            self.buildDics() 
+        
 
     
-    def __iter__(self):
-        return self
+    # self.idlst   :  an id list.
+    # self.anaDict :  {'class': set(ids) }
+    def buildIndex(self, filename):
+        ret = dict()
+        self.idlst = []
+        with open(filename, 'r') as f:
+            data = csv.reader(f) 
+            for line in data:
+                l = len(line)
+                if l == 1:
+                    continue
+                else:
+                    self.idlst.append(line[0])
+                    for k in range(1, l):
+                        key = unicode(line[k].strip())
+                        val = line[0] 
+                        if key not in ret:  
+                            ret[key] = set()
+                        else:
+                            ret[key].add(val)   
+        self.anaDict =  ret
+  
+
+
+
+    # create self.word
+    def buildWords(self): 
+
+#         cutter = DicHandler()
+#         with open(self.datas, 'r') as xmlfile:
+#             parse(xmlfile, cutter)
+#         with open(self.pickle, 'wb') as picfile:
+#             pickle.dump(cutter.dic, picfile)
+#         self.word = cutter.dic
+        pass
     
-    def next(self):
-        raise StopIteration()
+    def buildDics(self):
+        
+        #generate a total dictionary for index purpose from self.word without affecting self.word
+        dictionary = corpora.Dictionary(self.word)  
+
+        #representation with wordid in dictionary of self.word
+        corpus = [dictionary.doc2bow(text) for text in self.word]
+        
+        #initializing a model with a corpus, this doesn't affect corpus itself
+        wvMdl = models.Word2Vec(self.word)
+        
+        # this [] is a transform operator
+        retlst = wvMdl.most_similar(positive=[u'时尚'], topn=100 )
+        for r in retlst:
+            print r[0]
+        
+         
+        pass
+    
+    
+    def textClassify(self, uid):
+        #word_vec = models.Word2Vec(self.wordDict)
+        pass
     
     def countHF(self, wbLst):
         wbLst.sort(cmp=lambda x,y: cmp(x.forwarding, y.forwarding), reverse=True)
@@ -37,7 +132,12 @@ class Analyser(object):
             if no >= i.comments:
                 return no
     
-    def prepareData(self):
+    
+    def printResult(self):
+        self.textClassify(1501333927)
+        pass
+    
+    def depre_printResult(self):
         Ana = []
         weibodata = WeiboDatabase()
         figuredata = FigureDatabase()

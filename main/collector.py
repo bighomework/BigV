@@ -49,7 +49,7 @@ class Controller(object):
     #using database
     def start_analyse(self, filename):
         a = Analyser(filename)
-        a.prepareData()
+        a.printResult()
     
     
     

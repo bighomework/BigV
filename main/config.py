@@ -9,8 +9,11 @@ DB_FILE     = '../data/weibo2.db'
 THREAD_N    = 1
 PAGE_LIMIT  = 100
 
-
-
+DICPATH     = '../word.dic'
+DATASET     = '/home/prehawk/Downloads/Corpora/2.dat'
+PICK        = '/home/prehawk/Downloads/Corpora/2.pic'
+DATASET_TEST= '/home/prehawk/Downloads/Corpora/1.dat'
+PICK_TEST   = '/home/prehawk/Downloads/Corpora/1.pic'
 
 
 
