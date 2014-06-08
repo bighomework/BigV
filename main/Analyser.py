@@ -53,10 +53,9 @@ class Analyser(object):
     def __init__(self, filename):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         self.buildIndex(filename)
-        
         self.buildWords()
-        if not os.path.exists(config.DICPATH):
-            self.buildDics() 
+        #if not os.path.exists(config.DICPATH):
+        self.buildDics() 
         
 
     
@@ -82,38 +81,40 @@ class Analyser(object):
                             ret[key].add(val)   
         self.anaDict =  ret
   
-
-
-
     # create self.word
     def buildWords(self): 
 
-#         cutter = DicHandler()
-#         with open(self.datas, 'r') as xmlfile:
-#             parse(xmlfile, cutter)
-#         with open(self.pickle, 'wb') as picfile:
-#             pickle.dump(cutter.dic, picfile)
-#         self.word = cutter.dic
-        pass
+        weiboDB = WeiboDatabase() 
+        self.sentences = []
+        for uid in self.idlst:
+            print '*FETCHING* id {0}'.format(uid)
+            self.sentences = [ [word for word in list(jieba.cut(weibo[0])) if len(word) > 1]\
+                               for weibo in weiboDB.fetchText(uid)]
+            print 'done!'
+            #sreturn
+        
+            
     
     def buildDics(self):
         
         #generate a total dictionary for index purpose from self.word without affecting self.word
-        dictionary = corpora.Dictionary(self.word)  
+        #dictionary = corpora.Dictionary(self.sentences)  
 
         #representation with wordid in dictionary of self.word
-        corpus = [dictionary.doc2bow(text) for text in self.word]
+        #corpus = [dictionary.doc2bow(text) for text in self.sentences]
         
         #initializing a model with a corpus, this doesn't affect corpus itself
-        wvMdl = models.Word2Vec(self.word)
+        self.dic = dict()
+        wvMdl = models.Word2Vec(self.sentences)
         
-        # this [] is a transform operator
-        retlst = wvMdl.most_similar(positive=[u'时尚'], topn=100 )
-        for r in retlst:
-            print r[0]
-        
+        # this [] is a transform operator 
+        for figure_class in self.anaDict.viewkeys():
+            print '*BUILDING* {0} dic...'.format(figure_class)
+            self.dic[figure_class] = [r[0] for r in wvMdl.most_similar(positive=[figure_class], topn=100 ) ]
+            print 'done!'
          
-        pass
+        with open(config.DICPATH, 'wb') as picklefile:
+            pickle.dump(self.dic, picklefile)
     
     
     def textClassify(self, uid):

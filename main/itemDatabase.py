@@ -82,6 +82,12 @@ class WeiboDatabase(Database):
                 ret.append( self.itemCast(r) )
             return ret
                 
+    def fetchText(self, uid):
+        sql = "SELECT text FROM Weibo WHERE m_uid=?"
+        self.cur.execute( sql, (uid, ))
+        rows = self.cur.fetchall() 
+        return rows
+    
     
     def fetch(self, mid):
         sql = "SELECT * FROM Weibo WHERE m_id=?"
