@@ -53,9 +53,12 @@ class Analyser(object):
     def __init__(self, filename):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         self.buildIndex(filename)
-        self.buildWords()
-        #if not os.path.exists(config.DICPATH):
-        self.buildDics() 
+        if not os.path.exists(config.DICPATH):
+            self.buildWords() 
+            self.buildDics() 
+        else:
+            with open(config.DICPATH, 'rb') as pfile:
+                self.dic = pickle.load(pfile)
         
 
     
@@ -88,26 +91,18 @@ class Analyser(object):
         self.sentences = []
         for uid in self.idlst:
             print '*FETCHING* id {0}'.format(uid)
-            self.sentences = [ [word for word in list(jieba.cut(weibo[0])) if len(word) > 1]\
-                               for weibo in weiboDB.fetchText(uid)]
-            print 'done!'
+            self.sentences.extend( [ [word for word in list(jieba.cut(weibo[0])) if len(word) > 1]\
+                               for weibo in weiboDB.fetchText(uid)] )
+            print 'extending {0} sentences!'.format(len(self.sentences))
             #sreturn
         
             
     
     def buildDics(self):
-        
-        #generate a total dictionary for index purpose from self.word without affecting self.word
-        #dictionary = corpora.Dictionary(self.sentences)  
 
-        #representation with wordid in dictionary of self.word
-        #corpus = [dictionary.doc2bow(text) for text in self.sentences]
-        
-        #initializing a model with a corpus, this doesn't affect corpus itself
         self.dic = dict()
         wvMdl = models.Word2Vec(self.sentences)
-        
-        # this [] is a transform operator 
+         
         for figure_class in self.anaDict.viewkeys():
             print '*BUILDING* {0} dic...'.format(figure_class)
             self.dic[figure_class] = [r[0] for r in wvMdl.most_similar(positive=[figure_class], topn=100 ) ]
