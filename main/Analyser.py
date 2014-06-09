@@ -10,19 +10,20 @@ from xml.etree import ElementTree as ET
 import pickle
 import math
 import re 
-import os.path
+from os.path import exists
 import config
 from Item import *
 from itemDatabase import WeiboDatabase, FigureDatabase
 from gensim import corpora, models, similarities
 import jieba
 import logging
+import time
 
 class DicHandler(ContentHandler):
     
     def __init__(self):
         self.content = False
-        self.dic = []         
+        self.class_dic = []         
     
     def startElement(self,name,attrs):  
         if name == 'content':
@@ -36,7 +37,7 @@ class DicHandler(ContentHandler):
         if self.content:
             applst = list(jieba.cut(chars))
             applst = self.rmShortWords(applst)
-            self.dic.append( applst )
+            self.class_dic.append( applst )
 
     def rmShortWords(self, applst):
         ret = []
@@ -53,12 +54,16 @@ class Analyser(object):
     def __init__(self, filename):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         self.buildIndex(filename)
-        if not os.path.exists(config.DICPATH):
+        if not exists(config.CLASS_DIC) or exists(config.WORD_DIC):
             self.buildWords() 
             self.buildDics() 
         else:
-            with open(config.DICPATH, 'rb') as pfile:
-                self.dic = pickle.load(pfile)
+            with open(config.CLASS_DIC, 'rb') as pfile:
+                self.class_dic = pickle.load(pfile)
+            self.word_dic = corpora.Dictionary()
+            self.word_dic.load(config.WORD_DIC)
+            
+                
         
 
     
@@ -91,25 +96,30 @@ class Analyser(object):
         self.sentences = []
         for uid in self.idlst:
             print '*FETCHING* id {0}'.format(uid)
+            t = time.time()
             self.sentences.extend( [ [word for word in list(jieba.cut(weibo[0])) if len(word) > 1]\
                                for weibo in weiboDB.fetchText(uid)] )
-            print 'extending {0} sentences!'.format(len(self.sentences))
+            print 'extend to {0} weibos, using {1} secs!'.format(len(self.sentences), time.time()-t)
             #sreturn
         
             
     
     def buildDics(self):
 
-        self.dic = dict()
+        self.class_dic = dict()
         wvMdl = models.Word2Vec(self.sentences)
          
         for figure_class in self.anaDict.viewkeys():
-            print '*BUILDING* {0} dic...'.format(figure_class)
-            self.dic[figure_class] = [r[0] for r in wvMdl.most_similar(positive=[figure_class], topn=100 ) ]
-            print 'done!'
+            print '*BUILDING* {0} class_dic...'.format(figure_class)
+            t = time.time()
+            self.class_dic[figure_class] = [r[0] for r in wvMdl.most_similar(positive=[figure_class], topn=100 ) ]
+            print 'Build complete using {0} secs!'.format(time.time()-t)
          
-        with open(config.DICPATH, 'wb') as picklefile:
-            pickle.dump(self.dic, picklefile)
+        with open(config.CLASS_DIC, 'wb') as picklefile:
+            pickle.dump(self.class_dic, picklefile)
+        
+        self.word_dic = corpora.Dictionary(self.sentences)
+        self.word_dic.save(config.WORD_DIC)
     
     
     def textClassify(self, uid):
