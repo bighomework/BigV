@@ -55,6 +55,7 @@ class Analyser(object):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         self.buildIndex(filename)
         self.weiboDB = WeiboDatabase()
+        self.figureDB = FigureDatabase()
         if not exists(config.CLASS_DIC) and not exists(config.WORD_DIC):
             self.buildWords() 
             self.buildDics() 
@@ -179,17 +180,29 @@ class Analyser(object):
     
     def printResult(self):
         if not exists(config.TOTAL_RET):
-            for id in self.idlst:
-                print '*COUNTING* id {0}\'s rank'.format(id)
+            for tid in self.idlst:
+                print '*COUNTING* tid {0}\'s rank'.format(tid)
                 t = time.time()
-                self.getUidRanks(id)
+                self.getUidRanks(tid)
                 print 'using {0} secs.'.format(time.time()-t)
             with open(config.TOTAL_RET, 'wb') as pfile:
                 pickle.dump(self.result, pfile)
         else:
             with open(config.TOTAL_RET, 'rb') as pfile:
                 self.result = pickle.load(pfile)
-
+        
+        for k in self.anaDict:
+            print u'\r\n{0} 综合排名： '.format(k)
+            display = [ (tid, self.result[tid][k]) for tid in self.anaDict[k] ]
+            display.sort(cmp=lambda x,y:cmp(x[1],y[1]), reverse=True)
+            for no, i in enumerate(display):
+                a = self.figureDB.fetch(i[0]) 
+                print u'No.{0} {1} with {2} fans, {3} weibo, and {4} following -- HM: {5}'.format(no+1, a.name, a.fans, a.weibo, a.follow, i[1])
+                
+            
+            
+                 
+    
     
     def countHF(self, wbLst):
         wbLst.sort(cmp=lambda x,y: cmp(x.forwarding, y.forwarding), reverse=True)
