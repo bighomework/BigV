@@ -54,16 +54,18 @@ class Analyser(object):
     def __init__(self, filename):
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         self.buildIndex(filename)
-        if not exists(config.CLASS_DIC) or exists(config.WORD_DIC):
+        self.weiboDB = WeiboDatabase()
+        if not exists(config.CLASS_DIC) and not exists(config.WORD_DIC):
             self.buildWords() 
             self.buildDics() 
         else:
             with open(config.CLASS_DIC, 'rb') as pfile:
                 self.class_dic = pickle.load(pfile)
-            self.word_dic = corpora.Dictionary()
-            self.word_dic.load(config.WORD_DIC)
+            self.word_dic = corpora.Dictionary().load(config.WORD_DIC) 
+            print self.word_dic
             
-                
+        self.result = dict()
+        
         
 
     
@@ -91,15 +93,13 @@ class Analyser(object):
   
     # create self.word
     def buildWords(self): 
-
-        weiboDB = WeiboDatabase() 
+ 
         self.sentences = []
         for uid in self.idlst:
-            print '*FETCHING* id {0}'.format(uid)
-            t = time.time()
+            print '*FETCHING* id {0}'.format(uid) 
             self.sentences.extend( [ [word for word in list(jieba.cut(weibo[0])) if len(word) > 1]\
-                               for weibo in weiboDB.fetchText(uid)] )
-            print 'extend to {0} weibos, using {1} secs!'.format(len(self.sentences), time.time()-t)
+                               for weibo in self.weiboDB.fetchText(uid)] )
+            #print 'extend to {0} weibos, using {1} secs!'.format(len(self.sentences), time.time()-t)
             #sreturn
         
             
@@ -122,9 +122,74 @@ class Analyser(object):
         self.word_dic.save(config.WORD_DIC)
     
     
-    def textClassify(self, uid):
-        #word_vec = models.Word2Vec(self.wordDict)
-        pass
+    
+    def getUidRanks(self, uid):
+         
+        # inner list is WeiboItem
+        retMidware = dict( [(key, []) for key in self.anaDict.viewkeys()] ) 
+        retItem = dict( [(key, 2048.0) for key in self.anaDict.viewkeys()] )
+        keymap  = [key for key in self.class_dic]
+        
+        # this is a dictionary representation of class_dic
+        corpus = [self.word_dic.doc2bow(text) for text in self.class_dic.viewvalues()]
+        
+        #build a model with corpus
+        tfidf = models.TfidfModel(corpus)
+        
+        #transform corpus to tfidf representation, *STILL* a class word vector
+        corpus_tfidf = tfidf[corpus] 
+        
+        #create an index for similarity match
+        index = similarities.MatrixSimilarity(corpus_tfidf)
+        
+        if uid not in self.result:
+            for weibo in self.weiboDB.fetchLst(uid):
+                vec_bow = self.word_dic.doc2bow( list(jieba.cut(weibo.text)) )
+                vec_tf  = tfidf[vec_bow]
+                sims    = index[vec_tf]
+                simLst = list(enumerate(sims))
+                simLst.sort(cmp=lambda x,y: cmp(x[1], y[1]), reverse=True)
+                if simLst[0][1] == 0:
+                    continue
+                else:
+                    typename = keymap[simLst[0][0]]
+                    retMidware[ typename ].append(weibo)
+                    #print typename, weibo.text
+                
+            for k in retItem:
+                retItem[k] = self.countRank(retMidware[k])
+            self.result[uid] = retItem
+        
+    def countRank(self, wbLst):
+        HF = 0
+        HC = 0
+        wbLst.sort(cmp=lambda x,y: cmp(x.forwarding, y.forwarding), reverse=True)
+        for no, i in enumerate(wbLst):
+            if no >= i.forwarding:
+                HF = no
+                break
+            
+        wbLst.sort(cmp=lambda x,y: cmp(x.comments, y.comments), reverse=True)
+        for no, i in enumerate(wbLst):
+            if no >= i.comments:
+                HC = no
+                break
+            
+        return HF * 0.5 + HC * 0.5
+    
+    def printResult(self):
+        if not exists(config.TOTAL_RET):
+            for id in self.idlst:
+                print '*COUNTING* id {0}\'s rank'.format(id)
+                t = time.time()
+                self.getUidRanks(id)
+                print 'using {0} secs.'.format(time.time()-t)
+            with open(config.TOTAL_RET, 'wb') as pfile:
+                pickle.dump(self.result, pfile)
+        else:
+            with open(config.TOTAL_RET, 'rb') as pfile:
+                self.result = pickle.load(pfile)
+
     
     def countHF(self, wbLst):
         wbLst.sort(cmp=lambda x,y: cmp(x.forwarding, y.forwarding), reverse=True)
@@ -138,10 +203,7 @@ class Analyser(object):
             if no >= i.comments:
                 return no
     
-    
-    def printResult(self):
-        self.textClassify(1501333927)
-        pass
+
     
     def depre_printResult(self):
         Ana = []
@@ -162,7 +224,7 @@ class Analyser(object):
             a.totalcomments  = 0
             a.totalforwards  = 0
             for i in wbLst:
-                if i.omid:
+                if not i.omid:
                     a.origin += 1
                 a.totalcomments += i.comments
                 a.totalforwards += i.forwarding

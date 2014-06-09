@@ -11,6 +11,7 @@ PAGE_LIMIT  = 100
 
 CLASS_DIC     = '../class.dic'
 WORD_DIC      = '../word.dic'
+TOTAL_RET     = '../rank.ret'
 
 
 DATASET     = '/home/prehawk/Downloads/Corpora/2.dat'
