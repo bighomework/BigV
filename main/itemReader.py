@@ -105,7 +105,7 @@ class Page(object):
      
     # need isComplete           
     def makeUrl_follow(self, uid, pagenum):
-        self._comlete(uid)
+        self._complete(uid)
         return self.host + 'p/' + self.fulluid + '/follow?from=page_' + self.domain + '&page=' \
                 + str(pagenum) + '&_rnd=' + self._make_timestamp()
 
@@ -142,6 +142,10 @@ class WeiboPage(Page):
             if self.phase == 0:
                 return self._fetch_manload()
             else:
+                if self.pagenum > config.PAGE_LIMIT:
+                    print u'        - Thread {0} Page limit: {1} exceeded.'.format(self.no, config.PAGE_LIMIT)
+                    self.phase = -1
+                    continue
                 return self._fetch_autoload()
         raise StopIteration()
  
@@ -152,13 +156,11 @@ class WeiboPage(Page):
           
         if self.phase == 2: # encounter the end of the page 
             if re.search(self.maskA, docstr):  # has next page
+                print u'        - Thread {0} Getting Page {1}'.format(self.no, str(self.pagenum))
                 self.pagenum += 1
                 self.phase = 0
                 self.nextUrl = self.makeUrl_manload(self.uid, self.pagenum) 
-                print u'        - Thread {0} Getting Page {1}'.format(self.no, str(self.pagenum))
-                if self.pagenum > config.PAGE_LIMIT:
-                    print u'        - Thread {0} Page limit: {1} exceeded.'.format(self.no, config.PAGE_LIMIT)
-                    self.phase = -1
+
             else: # whole loop end
                 print u'        - Thread {0} Weibo doc completed with {1} pages'.format(self.no, str(self.pagenum))
                 self.phase = -1 

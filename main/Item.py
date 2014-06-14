@@ -53,6 +53,7 @@ class WeiboItem(Item):
         self.comments    = -1
         self.establish   = -1     #better time stamp
         self.text        = '-1' 
+        #self.text2       = '-1'
         
         
         

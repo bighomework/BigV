@@ -113,7 +113,7 @@ class Analyser(object):
         for figure_class in self.anaDict.viewkeys():
             print '*BUILDING* {0} class_dic...'.format(figure_class)
             t = time.time()
-            self.class_dic[figure_class] = [r[0] for r in wvMdl.most_similar(positive=[figure_class], topn=100 ) ]
+            self.class_dic[figure_class] = [r[0] for r in wvMdl.most_similar(positive=[figure_class], topn=1000 ) ]
             print 'Build complete using {0} secs!'.format(time.time()-t)
          
         with open(config.CLASS_DIC, 'wb') as picklefile:

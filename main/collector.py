@@ -15,8 +15,9 @@ import getpass
 from login import Login
 from pyquery import PyQuery
 from Item import FigureItem
-from Fetcher import WeiboFetcher, FigureFetcher, CommentFetcher, FollowReader
+from Fetcher import WeiboFetcher, FigureFetcher, CommentFetcher, FollowFetcher
 from Analyser import Analyser
+import pickle
 
  
     
@@ -29,6 +30,20 @@ class Controller(object):
     def start_fetch_single(self, uid, username, password):
         Login(username, password, config.TEST_PROXY)
         WeiboFetcher().getWeibo(uid)
+        
+    def start_rog(self, uid, username, password):
+        Login(username, password, config.TEST_PROXY)
+        flDict = FollowFetcher().getFollowLst(uid)
+        q = Queue.Queue()
+        for one in flDict:
+            q.put(one)
+            for i in flDict[one]:
+                q.put(i)
+
+        for i in range(config.THREAD_N):
+            WeiboFetcher(q, i, skip=True).start()
+            time.sleep(config.SPAWN_GAP)
+        #WeiboFetcher().getWeibo(uid)
         
     
     #data flows to database
@@ -165,7 +180,7 @@ class Tester(Controller):
         layerSet = followSet
         for uid in layerSet:
             
-            newSet = set( FollowReader(uid).getFollowLst() )
+            newSet = set( FollowFetcher(uid).getFollowLst() )
             writeSet = newSet - followSet
             followSet.union(newSet)  
         
@@ -202,6 +217,9 @@ if __name__ == '__main__':
                 pass
             else:
                 print 'Collector: need analyse file'
+        elif sys.argv[1] == 'rog':
+            print 'Collector: expanding weibos for {0}'.format(sys.argv[2])
+            c.start_rog(sys.argv[2], config.TEST_USER, config.TEST_PWD)
         else:
             print 'Unknown option!'
             

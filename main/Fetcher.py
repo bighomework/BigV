@@ -12,7 +12,8 @@ from pyquery import PyQuery
 from Item import FigureItem, WeiboItem, CommentItem
 from itemReader import Page, WeiboPage, CommentPage
 from itemDatabase import Database, FigureDatabase, CommentDatabase, WeiboDatabase, FollowDatabase
-
+import pickle
+from os.path import exists
 
 # a wrap of itemReader and itemDatabase
 class Fetcher(threading.Thread):
@@ -24,35 +25,65 @@ class Fetcher(threading.Thread):
         pass
 
 # e.g.        depricated
-# fr         = FollowReader( 123456 )
+# fr         = FollowFetcher( 123456 )
 # followlist = getFollowLst()
-class FollowReader(Page):
+class FollowFetcher(Fetcher):
     
-    def __init__(self, uid):
-        super(FollowReader, self).__init__(uid)
+    def __init__(self):
+        
+        super(FollowFetcher, self).__init__() 
         self.localReader = FollowDatabase()
+        self.remote      = Page()
         self.followLst = []
+        self.pagenum = 0
+        self.nextUrl = ''
         
-    def getFollowLst(self):
-        self._fetchlist( self.makeUrl_hostfollow() ) 
-        return self.followLst
+    def getFollowLst(self, uid):
+        self.uid = uid
+        if not exists('../flist0.oj'):
+            
+            self.followLst = self._fetchlist(self.uid, self.followLst)
+            flDict = dict(zip(self.followLst, [[]]))
+            for fl in self.followLst:
+                flDict[fl] = self.getLst(fl)
+            with open('../flist0.oj', 'w') as f:
+                pickle.dump(flDict, f)
+        else:
+            with open('../flist0.oj', 'r') as f:
+                flDict = pickle.load(f)
+                
+        with open('../flist1.txt', 'w') as f:
+            for one in flDict:
+                f.write(one+' ')
+                for i in flDict[one]:
+                    f.write(i+' ')
+                f.write('\n')
+        return flDict
+
         
-    def _fetchlist(self, url):
-        doc = self.getDoc(url).decode('string_escape') 
-          
+                
+        #return self.followLst
+        
+    def getLst(self, uid):
+        retLst = []
+        self._fetchlist(self.remote.makeUrl_hostfollow(self.uid), retLst)    
+        
+    def _fetchlist(self, url, retLst):
+        doc = self.remote.getDoc(url).decode('string_escape') 
         m = re.findall('<div class=\"name\">\s+(.*)\s+(.*)', doc)
         if m:
             for i in m: 
-                if re.search('class=\"W_ico16 approve\"', i[1]):
-                    userid = re.search('usercard=\"id=(\d+)\"', i[0]).group(1)
-                    self.followLst.append(userid)
-                else:
-                    continue 
+                #if re.search('class=\"W_ico16 approve\"', i[1]):
+                userid = re.search('usercard=\"id=(\d+)\"', i[0]).group(1)
+                retLst.append(userid)
+                #else:
+                    #continue 
 
         self.pagenum += 1
         if re.search(r'<span>下一页<\\/span><\\/a>', doc):
-            url = self.makeUrl_follow(self.pagenum)
-            self._fetchlist(url)
+            url = self.remote.makeUrl_follow(self.uid, self.pagenum)
+            if self.pagenum < 5:
+                self._fetchlist(url, retLst)
 
 
 
@@ -136,7 +167,7 @@ class CommentFetcher(Fetcher):
 # html   = wr.run()   # return a list of WeiboItem object
 class WeiboFetcher(threading.Thread):
     
-    def __init__(self, queue=None, no=0):         
+    def __init__(self, queue=None, no=0, skip=False):         
   
         super(WeiboFetcher, self).__init__() 
         
@@ -147,6 +178,8 @@ class WeiboFetcher(threading.Thread):
         self.q = queue
         self.no = no
         self.repeat = 0
+        self.skip = skip
+        
         
         
     def initRemask(self):
@@ -165,25 +198,31 @@ class WeiboFetcher(threading.Thread):
         self.figureReader   = FigureDatabase()
         while not self.q.empty():
             row = self.q.get() 
-            if len(row) > 1:
-                self.getWeibo( int(row[0]) )
+            if row:
+                self.getWeibo( int(row), self.skip )
+                print u'- Thread {0}: {1} items left.'.format(self.no, self.q.qsize())
             else:
                 continue
             
     
          
     #for single use
-    def getWeibo(self, uid):
+    def getWeibo(self, uid, skip=False):
         self.uid = uid
+        self.skip = skip
         print u'- Thread {0} Fetcher: start getting pages with uid = {1}'.format(self.no, self.uid)
         if not self.figureReader.fetch(self.uid):
             doc = self.remoteReader.getDoc( self.remoteReader.makeUrl_hostweibo(self.uid) )
             fg = self._parseHeadinfo(doc)
             self.figureReader.record( fg )
-            print u'- Thread {0} Fetcher: weibo figure {1} recorded.'.format(self.no, self.uid)
+            print u'- Thread {0} Fetcher: weibo figure {1} recorded.'.format(self.no, fg.uid)
         else:
-            print u'- Thread {0} Fetcher: weibo figure {1} already recorded.'.format(self.no, self.uid)
-        
+            if self.skip:
+                print u'- Thread {0} skipping..'.format(self.no)
+                return False
+            else:
+                print u'- Thread {0} Fetcher: weibo figure {1} already recorded.'.format(self.no, self.uid)
+            
         for doc in WeiboPage(self.uid, self.no): 
             try:
                 self.weiboLst   = []
@@ -194,6 +233,7 @@ class WeiboFetcher(threading.Thread):
             except:
                 continue 
          
+        return True
     
     def _parseWeibo(self, doc):
         d = PyQuery( doc )
@@ -214,6 +254,10 @@ class WeiboFetcher(threading.Thread):
                 
  
             t.text = i('.WB_detail').find('.WB_text').text()
+            text2 = i('.WB_media_expand.SW_fun2.S_line1.S_bg1').find('.WB_text').text()
+            if text2:
+                #print text2
+                t.text = text2
                 
             try:
                 dat = i('.WB_detail').children('.WB_func.clearfix').children('.WB_from') \
@@ -279,7 +323,7 @@ class WeiboFetcher(threading.Thread):
         else:
             t = 0  #2012-07-06
         
-        fg.uid       = self.remoteReader.uid
+        fg.uid       = self.uid
         fg.domainid  = self.remoteReader.domain
         fg.establish = t
         fg.follow = re.search(self.followmask, strimdata).group(1)

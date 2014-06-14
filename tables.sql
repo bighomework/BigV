@@ -29,6 +29,7 @@ create table Figure (
 	fans INTEGER, 
 	weibo INTEGER, 
 	establishtime INTEGER
+	isBiv BOOL
 	);
 
 
